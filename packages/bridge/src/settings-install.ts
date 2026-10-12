@@ -28,6 +28,7 @@ type Json = Record<string, unknown>;
 interface HookCmd {
   type: string;
   command?: string;
+  args?: string[];
   [k: string]: unknown;
 }
 interface Group {
@@ -43,12 +44,14 @@ export function projectSettingsPath(dir: string) {
   return join(dir, '.claude', 'settings.local.json');
 }
 
-const isOurs = (h: HookCmd) => typeof h.command === 'string' && h.command.includes(MARKER);
+const isOurs = (h: HookCmd) => (typeof h.command === 'string' && h.command.includes(MARKER)) || (Array.isArray(h.args) && h.args.some((a) => typeof a === 'string' && a.includes(MARKER)));
 
-export function hookCommand(hookJs: string): string {
-  // Marker is part of the file name so we can recognise our entries without extra metadata.
-  const q = (s: string) => `"${s.replace(/"/g, '\\"')}"`;
-  return `${q(process.execPath)} ${q(hookJs)}`;
+/**
+ * Exec form (`command` + `args`, no shell): works identically under bash, PowerShell and cmd, and paths
+ * with spaces (C:\\Program Files\\nodejs\\node.exe) need no quoting. The marker is part of the hook file name.
+ */
+export function hookHandler(hookJs: string): { command: string; args: string[] } {
+  return { command: process.execPath, args: [hookJs] };
 }
 
 export function buildSettings(existing: Json, hookJs: string): Json {
@@ -56,7 +59,7 @@ export function buildSettings(existing: Json, hookJs: string): Json {
   const hooks = ((out.hooks as Json | undefined) ?? {}) as Record<string, Group[]>;
   for (const { event, matcher, sync } of HOOK_EVENTS) {
     const groups = (hooks[event] ?? []).map((g) => ({ ...g, hooks: (g.hooks ?? []).filter((h) => !isOurs(h)) })).filter((g) => (g.hooks?.length ?? 0) > 0);
-    const handler: HookCmd = { type: 'command', command: hookCommand(hookJs), timeout: 10 };
+    const handler: HookCmd = { type: 'command', ...hookHandler(hookJs), timeout: 10 };
     if (!sync) handler.async = true; // never delay Claude Code
     groups.push({ ...(matcher ? { matcher } : {}), hooks: [handler] });
     hooks[event] = groups;

@@ -22,6 +22,9 @@ describe('settings merge', () => {
     expect(out.hooks.PostToolUse[0]).toEqual(existing.hooks.PostToolUse[0]);
     expect(out.hooks.Stop[0]).toEqual(existing.hooks.Stop[0]);
     for (const { event } of HOOK_EVENTS) expect(JSON.stringify(out.hooks[event])).toContain('mdw-hook');
+    // exec form: no shell quoting, so it works under bash AND PowerShell
+    expect(out.hooks.Stop[1].hooks[0].args).toEqual([HOOK]);
+    expect(out.hooks.Stop[1].hooks[0].command).toBe(process.execPath);
   });
   it('only registers documented event names; turn/session endings are synchronous so they survive process exit', () => {
     const documented = ['SessionStart', 'UserPromptSubmit', 'PreToolUse', 'PostToolUse', 'PostToolUseFailure', 'Notification', 'SubagentStart', 'SubagentStop', 'Stop', 'StopFailure', 'SessionEnd'];
