@@ -38,3 +38,14 @@ Events have a unique id, timestamp, schema version, session id, source and sanit
 
 ## CLI
 `mdw-bridge init | install-hooks | uninstall-hooks | install-service | uninstall-service | run | status | flush | config get/set | disconnect | purge`.
+
+## Cloud sessions (Claude Code on the web / desktop app "Cloud")
+Cloud sessions run on Anthropic's servers and do **not** read your PC's `~/.claude/settings.json`, so the local bridge cannot see them. Instead, register the hook inside the cloud environment (works for every repository using that environment):
+
+1. Dashboard → Settings → *Create bridge credential* (name it e.g. `cloud`). Keep the `mdw_…` value.
+2. Cloud environment menu (session title bar) → **Edit**:
+   * **Environment variables:** `MDW_URL=https://your-domain` and `MDW_TOKEN=mdw_…`
+   * **Network access:** allow the domain `your-domain` (Allowed domains).
+   * **Setup script:** `curl -fsSL https://your-domain/install-cloud.sh | bash`
+3. Start a **new** cloud session. The setup script downloads `https://your-domain/mdw-hook.js` (a public file without secrets) and registers it as a user-level hook in the VM. There is no daemon: each hook delivers directly (4 s timeout); events that cannot be delivered stay in the VM's `~/.mdw/spool` and are retried by the next hook, but are lost when the VM is reclaimed.
+Project identity comes from the checkout's git remote, so the same repository is one project whether it ran locally or in the cloud.

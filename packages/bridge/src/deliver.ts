@@ -23,6 +23,7 @@ export interface DeliveryStatus {
 export interface DeliverOptions {
   fetchImpl?: typeof fetch;
   batchSize?: number;
+  timeoutMs?: number;
 }
 
 /**
@@ -45,7 +46,7 @@ export async function flushOnce(cfg: BridgeConfig, status: DeliveryStatus, opts:
         method: 'POST',
         headers: { authorization: `Bearer ${cfg.token}`, 'content-type': 'application/json' },
         body: JSON.stringify({ events: batch.map((b) => b.event) }),
-        signal: AbortSignal.timeout(15000),
+        signal: AbortSignal.timeout(opts.timeoutMs ?? 15000),
       });
     } catch (e) {
       status.health = 'offline';

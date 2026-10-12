@@ -36,7 +36,7 @@ if (!dry && !process.env.CLOUDFLARE_API_TOKEN) {
   }
 }
 
-must(run('npm', ['run', 'build', '-w', '@mdw/web']), 'frontend build');
+must(run('npm', ['run', 'build', '-w', '@mdw/web']), 'frontend build'); // prebuild also publishes /mdw-hook.js
 
 const cfg = JSON.parse(readFileSync(join(worker, 'wrangler.json'), 'utf8'));
 const out = join(worker, 'wrangler.generated.json');

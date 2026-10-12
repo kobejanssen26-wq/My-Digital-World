@@ -9,3 +9,4 @@ dist
 .mdw-secrets/
 coverage
 apps/worker/wrangler.generated.json
+apps/web/public/mdw-hook.js

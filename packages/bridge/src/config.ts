@@ -1,4 +1,4 @@
-import { randomBytes } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { chmodSync, existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { ensureDirs, paths } from './paths.js';
 
@@ -22,6 +22,22 @@ export interface BridgeConfig {
 }
 
 export const DEFAULT_SYNC: BridgeConfig['sync'] = { promptSummaries: true, repoIdentity: true, projectNames: true };
+
+/** Cloud sessions (no ~/.mdw, no daemon): credentials come from environment variables of the cloud environment. */
+export function envConfig(env = process.env): BridgeConfig | null {
+  const url = env.MDW_URL;
+  const token = env.MDW_TOKEN;
+  if (!url || !token) return null;
+  return {
+    url: validateUrl(url),
+    token,
+    // Stable salt derived from the credential so project ids stay consistent across short-lived VMs.
+    hostSalt: createHash('sha256').update('mdw-salt:' + token).digest('hex').slice(0, 32),
+    port: 0,
+    localToken: '',
+    sync: { ...DEFAULT_SYNC, ...(env.MDW_SYNC_SUMMARIES === 'false' ? { promptSummaries: false } : {}) },
+  };
+}
 
 export function loadConfig(): BridgeConfig | null {
   if (!existsSync(paths.config())) return null;

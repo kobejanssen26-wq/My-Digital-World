@@ -68,3 +68,19 @@ describe('settings file handling', () => {
     expect(readFileSync(file, 'utf8')).toBe('{ "hooks": ');
   });
 });
+
+import { envConfig } from '../src/config.js';
+describe('cloud mode config', () => {
+  it('builds a config from MDW_URL/MDW_TOKEN with a stable credential-derived salt', () => {
+    const env = { MDW_URL: 'https://mydw.be/', MDW_TOKEN: 'mdw_' + 'b'.repeat(43) };
+    const a = envConfig(env)!;
+    expect(a.url).toBe('https://mydw.be');
+    expect(envConfig(env)!.hostSalt).toBe(a.hostSalt);
+    expect(a.hostSalt).not.toContain('mdw_');
+  });
+  it('is absent without both variables and refuses plain http for non-local hosts', () => {
+    expect(envConfig({ MDW_URL: 'https://x.test' })).toBeNull();
+    expect(envConfig({})).toBeNull();
+    expect(() => envConfig({ MDW_URL: 'http://evil.test', MDW_TOKEN: 'mdw_x' })).toThrow();
+  });
+});

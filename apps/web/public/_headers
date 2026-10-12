@@ -7,3 +7,9 @@
   Cross-Origin-Opener-Policy: same-origin
 /assets/*
   Cache-Control: public, max-age=31536000, immutable
+/mdw-hook.js
+  Content-Type: text/javascript; charset=utf-8
+  Cache-Control: no-cache
+/install-cloud.sh
+  Content-Type: text/plain; charset=utf-8
+  Cache-Control: no-cache
