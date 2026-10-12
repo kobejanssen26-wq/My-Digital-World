@@ -1,0 +1,20 @@
+name: Deploy
+# Requires repository secrets CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID, and (optional) variable MDW_DOMAIN.
+# The very first deploy should be run locally (see docs/CLOUDFLARE_DEPLOYMENT.md) so the password secret can be set.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci --legacy-peer-deps
+      - run: npm run typecheck && npm run lint && npm test
+      - run: node scripts/deploy.mjs ${{ vars.MDW_DOMAIN && format('--domain {0}', vars.MDW_DOMAIN) || '' }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

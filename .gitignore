@@ -1,0 +1,11 @@
+node_modules
+dist
+.wrangler
+.dev.vars
+.env
+.env.*
+!.env.example
+*.log
+.mdw-secrets/
+coverage
+apps/worker/wrangler.generated.json
