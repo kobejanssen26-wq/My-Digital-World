@@ -88,7 +88,7 @@ check('activity feed describes the failed test run', true);
 await page.reload();
 await page.getByRole('button', { name: 'Projects' }).first().click();
 await page.getByLabel('Filter projects by name').fill(name);
-check('project survives a page reload (server-side persistence)', await page.getByRole('button', { name: new RegExp(name) }).first().isVisible());
+check('project survives a page reload (server-side persistence)', await page.getByRole('button', { name: new RegExp(name) }).first().waitFor({ timeout: 10000 }).then(() => true, () => false));
 
 // --- 3D camera controls don't swallow UI clicks ------------------------------------------------
 await page.getByRole('button', { name: 'World' }).first().click();
