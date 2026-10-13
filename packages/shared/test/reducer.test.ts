@@ -176,18 +176,30 @@ describe('out-of-order handling', () => {
   });
 });
 
-describe('stale sessions', () => {
-  it('marks idle-too-long sessions lost and interrupts in-flight tasks', () => {
+describe('stale sessions and idle completion', () => {
+  it('marks silent in-flight sessions lost and interrupts their tasks', () => {
     const m = run([prompt(T0), tool(T0 + 1, 'modify')]);
-    expect(markStale(m, T0 + 10 * 60_000)).toBeNull();
+    expect(markStale(m, T0 + 5 * 60_000)).toBeNull();
     const r = markStale(m, T0 + 31 * 60_000)!;
     expect(r.model.session.status).toBe('lost');
     expect(r.model.tasks[0]!.status).toBe('interrupted');
   });
-  it('leaves ready_for_review and needs_attention untouched', () => {
+  it('a finished task becomes completed after 10 idle minutes (explicit basis), not before', () => {
     const m = run([prompt(T0), tool(T0 + 1, 'modify'), ev('turn.stop', T0 + 2)]);
-    const r = markStale(m, T0 + 60 * 60_000)!;
-    expect(r.model.tasks[0]!.status).toBe('ready_for_review');
+    expect(markStale(m, T0 + 5 * 60_000)).toBeNull();
+    const r = markStale(m, T0 + 11 * 60_000)!;
+    expect(r.model.tasks[0]!.status).toBe('completed');
+    expect(r.model.tasks[0]!.completionBasis).toBe('claude_finished_then_idle');
+    expect(r.model.session.status).toBe('ended');
+  });
+  it('never auto-completes while tests are failing', () => {
+    const m = run([prompt(T0), tool(T0 + 1, 'test', false), ev('turn.stop', T0 + 2)]);
+    const r = markStale(m, T0 + 60 * 60_000);
+    expect(r === null || r.model.tasks[0]!.status === 'needs_attention').toBe(true);
+  });
+  it('does not touch a session where Claude is still working (not idle)', () => {
+    const m = run([prompt(T0), tool(T0 + 1, 'modify')]);
+    expect(markStale(m, T0 + 11 * 60_000)).toBeNull();
   });
 });
 

@@ -161,3 +161,24 @@ describe('personal cloud', () => {
     expect(validateUpload('a.png', 'image/png', new Uint8Array([0x89, 0x50, 0x4e, 0x47]))).toBeNull();
   });
 });
+
+describe('idle completion (cloud sessions never send SessionEnd)', () => {
+  it('moves a finished, idle project to the completed district and records the basis', async () => {
+    const s = await login('10.9.0.1');
+    const t = await makeToken(s);
+    const proj = { keys: ['path:idlecomplete1'], name: 'idle-done' };
+    const old = Date.now() - 20 * 60_000;
+    const mk = (type: string, ts: number, d = {}) => event(type, ts, d, { sessionId: 'sid', project: proj });
+    await ingest(t.token, [mk('prompt.submit', old, { promptKind: 'feature', confidence: 'medium', summary: 'x' }), mk('tool.done', old + 1, { category: 'modify' }), mk('turn.stop', old + 2)]);
+    let snap = (await (await call('/api/snapshot', { cookie: s.cookie })).json()) as any;
+    expect(snap.projects.find((p: any) => p.name === 'idle-done').building).toBe('development');
+    const { env } = await import('cloudflare:workers');
+    await (env as any).HUB.get((env as any).HUB.idFromName('main')).maintain();
+    snap = (await (await call('/api/snapshot', { cookie: s.cookie })).json()) as any;
+    const p = snap.projects.find((x: any) => x.name === 'idle-done');
+    expect(p.building).toBe('completed');
+    expect(p.testStatus).toBe('unknown');
+    expect(p.deployStatus).toBe('none');
+    expect(snap.tasks.find((x: any) => x.projectId === p.id).completionBasis).toBe('claude_finished_then_idle');
+  });
+});

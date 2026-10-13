@@ -16,6 +16,7 @@ Task status is derived only from observed events. Unknown stays unknown.
 | `StopFailure` | **Failed** |
 | `SessionEnd` after Ready for review and no failing tests | **Completed**, basis `claude_finished_session_closed` ("Claude finished and the session was closed — not verified by tests or deployment") |
 | `SessionEnd` with in-flight work | **Interrupted** |
+| Ready for review + 10 min without activity + tests not failing | **Completed**, basis `claude_finished_then_idle` (cloud VMs rarely send SessionEnd); session ended |
 | no event for 30 min while active | session **Lost**, in-flight tasks **Interrupted**; the UI shows *Disconnected* immediately |
 | dashboard "Mark complete" / "Reopen" / "Pause" | recorded as `user.action` events |
 

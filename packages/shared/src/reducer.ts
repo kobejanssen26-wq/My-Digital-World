@@ -329,21 +329,47 @@ export function applyEvent(input: Model, ev: Envelope): Outcome {
   return out;
 }
 
-/** Sessions with no event for STALE_SESSION_MS are marked lost; their in-flight tasks interrupted. */
+/** A finished (Stop) task with no activity this long counts as done: cloud VMs rarely emit SessionEnd. */
+export const IDLE_COMPLETE_MS = 10 * 60 * 1000;
+
+/**
+ * Time-based transitions, evaluated by the periodic sweep:
+ *  - Claude finished its last turn (ready_for_review), nothing happened for IDLE_COMPLETE_MS and tests are
+ *    not failing  => completed (basis `claude_finished_then_idle`), idle session ended.
+ *  - No event for STALE_SESSION_MS => session lost, in-flight tasks interrupted.
+ */
 export function markStale(m: Model, now: number): { model: Model; changedTaskIds: string[] } | null {
   if (m.session.status === 'ended' || m.session.status === 'lost') return null;
-  if (now - m.session.lastEventAt < STALE_SESSION_MS) return null;
+  const idleFor = now - m.session.lastEventAt;
   const c: Model = structuredClone(m);
-  c.session.status = 'lost';
   const changed: string[] = [];
-  for (const t of c.tasks) {
-    if (isOpenTask(t.status) && t.status !== 'ready_for_review' && t.status !== 'needs_attention') {
-      t.status = 'interrupted';
-      t.updatedAt = now;
-      changed.push(t.id);
+
+  if (idleFor >= IDLE_COMPLETE_MS && c.session.status === 'idle' && c.facts.testStatus !== 'failing') {
+    for (const t of c.tasks) {
+      if (t.status === 'ready_for_review') {
+        t.status = 'completed';
+        t.completedAt = now;
+        t.completionBasis = 'claude_finished_then_idle';
+        t.updatedAt = now;
+        changed.push(t.id);
+      }
+    }
+    if (changed.length && !c.tasks.some((t) => isOpenTask(t.status) && t.status !== 'needs_attention')) {
+      c.session.status = 'ended';
+      c.session.endedAt = m.session.lastEventAt;
     }
   }
-  return { model: c, changedTaskIds: changed };
+  if (idleFor >= STALE_SESSION_MS && c.session.status !== 'ended') {
+    c.session.status = 'lost';
+    for (const t of c.tasks) {
+      if (isOpenTask(t.status) && t.status !== 'ready_for_review' && t.status !== 'needs_attention') {
+        t.status = 'interrupted';
+        t.updatedAt = now;
+        if (!changed.includes(t.id)) changed.push(t.id);
+      }
+    }
+  }
+  return c.session.status === m.session.status && !changed.length ? null : { model: c, changedTaskIds: changed };
 }
 
 // ---------------------------------------------------------------------------

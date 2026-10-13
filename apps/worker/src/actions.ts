@@ -4,6 +4,7 @@ import {
   deriveLifecycle,
   isOpenTask,
   markStale,
+  IDLE_COMPLETE_MS,
   slotPosition,
   type Delta,
   type Model,
@@ -133,7 +134,7 @@ export async function loadDelta(db: D1Database, projectIds: string[], taskIds: s
 
 /** Periodic maintenance: mark silent sessions lost, apply retention. Serialized through the Hub. */
 export async function maintenance(db: D1Database, retentionDays: number, now = Date.now()): Promise<Delta | null> {
-  const cutoff = now - 30 * 60 * 1000;
+  const cutoff = now - IDLE_COMPLETE_MS;
   const { results } = await db.prepare(`SELECT * FROM sessions WHERE status IN ('active','idle') AND last_event_at < ?`).bind(cutoff).all<Record<string, unknown>>();
   const touchedProjects = new Set<string>();
   const touchedTasks: string[] = [];
@@ -142,16 +143,20 @@ export async function maintenance(db: D1Database, retentionDays: number, now = D
   for (const row of results) {
     const session = sessionRow(row);
     const tasks = (await db.prepare('SELECT * FROM tasks WHERE session_id = ?').bind(session.id).all<Record<string, unknown>>()).results.map(taskRow);
+    const proj = await db.prepare('SELECT test_status, activity_level FROM projects WHERE id = ?').bind(session.projectId).first<{ test_status: string; activity_level: string }>();
     const model: Model = {
-      facts: { testStatus: 'unknown', deployStatus: 'none', testTs: 0, deployTs: 0, activityLevel: 'developing', lastActive: session.lastEventAt },
+      facts: { testStatus: (proj?.test_status ?? 'unknown') as Model['facts']['testStatus'], deployStatus: 'none', testTs: 0, deployTs: 0, activityLevel: 'developing', lastActive: session.lastEventAt },
       session,
       tasks,
     };
     const r = markStale(model, now);
     if (!r) continue;
-    const stmts = [db.prepare(`UPDATE sessions SET status='lost' WHERE id=?`).bind(session.id)];
+    const stmts = [db.prepare(`UPDATE sessions SET status=?, ended_at=? WHERE id=?`).bind(r.model.session.status, r.model.session.endedAt, session.id)];
     for (const id of r.changedTaskIds) {
-      stmts.push(db.prepare(`UPDATE tasks SET status='interrupted', updated_at=?, version=? WHERE id=?`).bind(now, seq, id));
+      const t = r.model.tasks.find((x) => x.id === id)!;
+      stmts.push(
+        db.prepare(`UPDATE tasks SET status=?, completed_at=?, completion_basis=?, updated_at=?, version=? WHERE id=?`).bind(t.status, t.completedAt, t.completionBasis, now, seq, id),
+      );
       touchedTasks.push(id);
     }
     await db.batch(stmts);
@@ -165,7 +170,7 @@ export async function maintenance(db: D1Database, retentionDays: number, now = D
     }
     await db
       .prepare(`INSERT INTO events (seq, id, type, project_id, session_id, task_id, ts, ingested_at, schema_version, source, late, data) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`)
-      .bind(seq, `sys_${now.toString(36)}_${crypto.randomUUID().slice(0, 8)}`, 'system.maintenance', null, null, null, now, now, 1, 'system', 0, JSON.stringify({ sessionsLost: touchedSessions.length }))
+      .bind(seq, `sys_${now.toString(36)}_${crypto.randomUUID().slice(0, 8)}`, 'system.maintenance', null, null, null, now, now, 1, 'system', 0, JSON.stringify({ sessionsSwept: touchedSessions.length }))
       .run();
   }
   // Retention + housekeeping

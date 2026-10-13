@@ -60,7 +60,7 @@ export function describeEvent(ev: EventRow, project?: Pick<ProjectRow, 'name'> |
     case 'user.action':
       return `You: ${String(d.action ?? 'action').replace(/_/g, ' ')}${project ? ` — ${project.name}` : ''}`;
     case 'system.maintenance':
-      return 'Silent sessions were marked as lost';
+      return 'Inactive sessions were tidied up (finished work completed, silent sessions marked lost)';
     default:
       return ev.type;
   }
@@ -73,6 +73,7 @@ export function taskStatusLabel(t: Pick<TaskRow, 'status'>) {
 export const COMPLETION_BASIS_LABEL: Record<string, string> = {
   answered: 'Question answered',
   claude_finished_session_closed: 'Claude finished its last turn and the session was closed. Not verified by tests or deployment.',
+  claude_finished_then_idle: 'Claude finished and nothing happened for 10+ minutes. Not verified by tests or deployment.',
   user_marked: 'Marked complete by you',
 };
 
